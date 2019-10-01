@@ -1,13 +1,20 @@
-name: v$(SemVer)
+name: v$(BuildVer)
 
 variables:
   Ver: '0.9.0'
   BuildRev: $[counter(variables.Ver, 1)]
   BuildVer: $[ format('{0}.{1}', variables.Ver, variables.BuildRev) ]
-  ${{ if eq( variables.Build.SourceBranchName, 'master' ) }}:
-    SemVer: $(Ver)
-  ${{ if ne( variables.Build.SourceBranchName, 'master' ) }}:
-    SemVer: $[ format('{0}-pre{1}', variables.Ver, variables.BuildRev) ]
+  Alpha: $(Build.SourceBranchName)
+  Bravo: ${{ variables['Build.SourceBranchName'] }}
+  Charlie: $[ format('{0}', variables['Build.SourceBranchName']) ]
+  ${{ if eq( variables['Build.SourceBranchName'], 'fix-pipe2' ) }}:
+    Delta: $(Ver)-pre$(BuildRev)
+  ${{ if ne( variables['Build.SourceBranchName'], 'fix-pipe2' ) }}:
+    Delta: 'N'
+  ${{ if eq( variables['Build.SourceBranchName'], 'fix-pipe2' ) }}:
+    Golf: $[ format('{0}-pre{1}', variables.Ver, variables.BuildRev) ]
+  ${{ if ne( variables['Build.SourceBranchName'], 'fix-pipe2' ) }}:
+    Golf: 'N'
 
 trigger:
 - master
@@ -18,10 +25,35 @@ pool:
 
 steps:
 - task: PowerShell@2
+  enabled: false
+  displayName: 'Set SemVer'
+  condition: eq(variables['Build.SourceBranchName'], 'master')
   inputs:
     targetType: 'inline'
     script: |
-      Write-Host "SemVer: $(SemVer)"
+      Write-Host "##vso[task.setvariable variable=SemVer;]$(Ver)"
+
+- task: PowerShell@2
+  enabled: false
+  displayName: 'Set SemVer PreRel'
+  condition: ne(variables['Build.SourceBranchName'], 'master')
+  inputs:
+    targetType: 'inline'
+    script: |
+      Write-Host "##vso[task.setvariable variable=SemVer;]$(Ver)-pre$(BuildRev)"
+
+- task: PowerShell@2
+  inputs:
+    targetType: 'inline'
+    script: |      
+      #Write-Host "SemVer: $(SemVer)"
+      Write-Host "Alpha: $(Alpha)"
+      Write-Host "Bravo: $(Bravo)"
+      Write-Host "Charlie: $(Charlie)"
+      Write-Host "Delta1: $(Delta)"
+      Write-Host "Delta2: $env:DELTA"
+      Write-Host "Golf1: $(Golf)"
+      Write-Host "Golf2: $env:Golf"
       Write-Host "IsFork: $env:SYSTEM_PULLREQUREST_ISFORK"
       Write-Host "PullRequestId: $env:SYSTEM_PULLREQUEST_PULLREQUESTID"
       Write-Host "PullRequestNumber: $env:SYSTEM_PULLREQUEST_PULLREQUESTNUMBER"
