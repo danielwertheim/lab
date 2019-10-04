@@ -1,13 +1,12 @@
-name: v$(Semver)
+name: $(SemVer)
 
 variables:
-  Ver: '0.2.0'
-  BuildRev: $[counter(variables.Ver, 1)]
-  BuildVer: $[ format('{0}.{1}', variables.Ver, variables.BuildRev) ]
+  BuildRev: $[counter(format('{0:yyyyMMdd}', pipeline.startTime), 1)]
   ${{ if startsWith( variables['Build.SourceBranch'], 'refs/tags' ) }}:
-    SemVer: $[ variables.Ver ]
+    SemVer: $[ variables['Build.SourceBranchName'] ]
   ${{ if not( startsWith( variables['Build.SourceBranch'], 'refs/tags' )) }}:
-    SemVer: $[ format('{0}-pre{1}', variables.Ver, variables.BuildRev) ]
+    SemVer: $[format('{0:yyyy}.{0:MM}.{0:dd}-pre{1}', pipeline.startTime, variables.BuildRev)]
+  InfoVer: $(Build.SourceVersion)
 
 trigger:
   batch: true
@@ -26,37 +25,45 @@ pool:
   name: Azure Pipelines
   vmImage: windows-2019
 
-jobs:
-- job: Main
-  displayName: 'Do the dance'
-  timeoutInMinutes: 10
-  cancelTimeoutInMinutes: 5
-  steps:
-  - task: DotNetCoreCLI@2
-    displayName: 'Build Solution'
-    inputs:
-      command: build
-      projects: 'src/*.sln'
-      arguments: '-c $(BuildConfiguration) --no-incremental -p:TreatWarningsAsErrors=true -p:Version=$(SemVer) -p:AssemblyVersion=$(BuildVer) -p:FileVersion=$(BuildVer) -p:InformationalVersion=$(BuildVer)'
+stages:
+- stage: Build
+  jobs:
+  - job: Build
+    timeoutInMinutes: 10
+    cancelTimeoutInMinutes: 5
+    steps:
+    - task: DotNetCoreCLI@2
+      displayName: 'Build Solution'
+      inputs:
+        command: build
+        projects: 'src/*.sln'
+        arguments: '-c $(BuildConfiguration) --no-incremental -p:TreatWarningsAsErrors=true -p:Version=$(SemVer) -p:InformationalVersion=$(InfoVer)'
 
-  - task: DotNetCoreCLI@2
-    displayName: 'Pack Nupkg'
-    inputs:
-      command: custom
-      custom: pack
-      projects: 'src/*.sln'
-      arguments: '-c $(BuildConfiguration) --no-build -o $(Build.ArtifactStagingDirectory) -p:Version=$(SemVer) -p:AssemblyVersion=$(BuildVer) -p:FileVersion=$(BuildVer) -p:InformationalVersion=$(BuildVer)'
+- stage: Deploy
+  condition: and (succeeded(), startsWith( variables['Build.SourceBranch'], 'refs/tags' ))
+  jobs:
+  - job: Deploy
+    timeoutInMinutes: 10
+    cancelTimeoutInMinutes: 5
+    steps:
+    - task: DotNetCoreCLI@2
+      displayName: 'Pack Nupkg'
+      inputs:
+        command: custom
+        custom: pack
+        projects: 'src/*.sln'
+        arguments: '-c $(BuildConfiguration) --no-build -o $(Build.ArtifactStagingDirectory) -p:Version=$(SemVer) -p:InformationalVersion=$(InfoVer)'
 
-  - task: PublishBuildArtifacts@1
-    inputs:
-      PathtoPublish: '$(Build.ArtifactStagingDirectory)'
-      ArtifactName: 'lab-artifact'
-
-  - task: NuGetCommand@2
-    displayName: 'Push Nupkg to AZ Artifacts'
-    enabled: false
-    inputs:
-      command: push
-      packagesToPush: '$(Build.ArtifactStagingDirectory)/*.nupkg;!$(Build.ArtifactStagingDirectory)/*.symbols.nupkg'
-      publishVstsFeed: 'lab-feed'
-      verbosityPush: Normal
+    - task: PublishBuildArtifacts@1
+      inputs:
+        PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+        ArtifactName: 'lab-artifact'
+  
+    - task: NuGetCommand@2
+      displayName: 'Push Nupkg to AZ Artifacts'
+      enabled: false
+      inputs:
+        command: push
+        packagesToPush: '$(Build.ArtifactStagingDirectory)/*.nupkg;!$(Build.ArtifactStagingDirectory)/*.symbols.nupkg'
+        publishVstsFeed: 'lab-feed'
+        verbosityPush: Normal
