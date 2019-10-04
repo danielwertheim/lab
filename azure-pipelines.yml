@@ -1,0 +1,61 @@
+name: v$(Semver)
+
+variables:
+  Ver: '0.1.0'
+  BuildRev: $[counter(variables.Ver, 1)]
+  BuildVer: $[ format('{0}.{1}', variables.Ver, variables.BuildRev) ]
+  ${{ if eq( variables['Build.SourceBranchName'], 'master' ) }}:
+    SemVer: $[ variables.Ver ]
+  ${{ if ne( variables['Build.SourceBranchName'], 'master' ) }}:
+    SemVer: $[ format('{0}-pre{1}', variables.Ver, variables.BuildRev) ]
+
+trigger:
+  batch: true
+  branches:
+    include:
+    - master
+
+pr:
+  autoCancel: true
+  branches:
+    include:
+    - master
+
+pool:
+  name: Azure Pipelines
+  vmImage: windows-2019
+
+jobs:
+- job: Main
+  displayName: 'Do the dance'
+  timeoutInMinutes: 10
+  cancelTimeoutInMinutes: 5
+  steps:
+  - task: DotNetCoreCLI@2
+    displayName: 'Build Solution'
+    inputs:
+      command: build
+      projects: 'src/*.sln'
+      arguments: '-c $(BuildConfiguration) --no-incremental -p:TreatWarningsAsErrors=true -p:Version=$(SemVer) -p:AssemblyVersion=$(BuildVer) -p:FileVersion=$(BuildVer) -p:InformationalVersion=$(BuildVer)'
+
+  - task: DotNetCoreCLI@2
+    displayName: 'Pack Nupkg'
+    inputs:
+      command: custom
+      custom: pack
+      projects: 'src/*.sln'
+      arguments: '-c $(BuildConfiguration) --no-build -o $(Build.ArtifactStagingDirectory) -p:Version=$(SemVer) -p:AssemblyVersion=$(BuildVer) -p:FileVersion=$(BuildVer) -p:InformationalVersion=$(BuildVer)'
+
+  - task: PublishBuildArtifacts@1
+    inputs:
+      PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+      ArtifactName: 'lab-artifact'
+
+  - task: NuGetCommand@2
+    displayName: 'Push Nupkg to AZ Artifacts'
+    enabled: false
+    inputs:
+      command: push
+      packagesToPush: '$(Build.ArtifactStagingDirectory)/*.nupkg;!$(Build.ArtifactStagingDirectory)/*.symbols.nupkg'
+      publishVstsFeed: 'lab-feed'
+      verbosityPush: Normal
