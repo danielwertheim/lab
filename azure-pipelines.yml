@@ -4,9 +4,9 @@ variables:
   Ver: '0.2.0'
   BuildRev: $[counter(variables.Ver, 1)]
   BuildVer: $[ format('{0}.{1}', variables.Ver, variables.BuildRev) ]
-  ${{ if eq( variables['Build.SourceBranchName'], 'master' ) }}:
+  ${{ if startsWith( variables['Build.SourceBranch'], 'refs/tags' ) }}:
     SemVer: $[ variables.Ver ]
-  ${{ if ne( variables['Build.SourceBranchName'], 'master' ) }}:
+  ${{ if not( startsWith( variables['Build.SourceBranch'], 'refs/tags' )) }}:
     SemVer: $[ format('{0}-pre{1}', variables.Ver, variables.BuildRev) ]
 
 trigger:
@@ -14,6 +14,7 @@ trigger:
   branches:
     include:
     - master
+    - refs/tags/*
 
 pr:
   autoCancel: true
