@@ -25,59 +25,52 @@ pool:
   name: Azure Pipelines
   vmImage: windows-2019
 
-stages:
-- stage: Win
-  jobs:
-  - job: Build
-    displayName: 'Builds, tests & produces artifacts'
-    timeoutInMinutes: 10
-    cancelTimeoutInMinutes: 5
-    steps:
-    - task: DotNetCoreCLI@2
-      displayName: 'Build'
-      inputs:
-        command: build
-        projects: 'src/*.sln'
-        arguments: '-c $(BuildConfiguration) --no-incremental -p:TreatWarningsAsErrors=true -p:Version=$(SemVer) -p:InformationalVersion=$(InfoVer)'
-
-    - task: DotNetCoreCLI@2
-      displayName: 'Pack NuPkg'
-      inputs:
-        command: custom
-        custom: pack
-        projects: 'src/*.sln'
-        arguments: '-c $(BuildConfiguration) --no-build -o $(Build.ArtifactStagingDirectory) -p:Version=$(SemVer) -p:InformationalVersion=$(InfoVer)'
-
-    - task: PublishPipelineArtifact@1
-      displayName: 'Publish Artifacts'
-      inputs:
-        targetPath: '$(Build.ArtifactStagingDirectory)'
-        artifact: Artifacts
-
-  - deployment: Deploy
-    environment: 'Prod'
-    displayName: 'Deploys artifacts'
-    dependsOn: Build
-    condition: and (succeeded(), startsWith( variables['Build.SourceBranch'], 'refs/tags' ))
-    timeoutInMinutes: 10
-    cancelTimeoutInMinutes: 5
-    strategy: 
-      runOnce:
-        deploy:
-          steps:
-          - checkout: none
-
-          - task: DownloadBuildArtifacts@0
-            displayName: 'Download Build Artifacts'
-            inputs:
-              artifactName: Artifacts
-              downloadPath: '$(Build.ArtifactStagingDirectory)'
-
-          - task: NuGetCommand@2
-            displayName: 'Push Nupkg to AZ Artifacts'
-            enabled: true
-            inputs:
-              command: push
-              packagesToPush: '$(Build.ArtifactStagingDirectory)/*.nupkg;!$(Build.ArtifactStagingDirectory)/*.symbols.nupkg'
-              publishVstsFeed: 'lab-feed'
-              verbosityPush: Normal
+jobs:
+- job: Build
+  displayName: 'Builds, tests & produces artifacts'
+  timeoutInMinutes: 10
+  cancelTimeoutInMinutes: 5
+  steps:
+  - task: DotNetCoreCLI@2
+    displayName: 'Build'
+    inputs:
+      command: build
+      projects: 'src/*.sln'
+      arguments: '-c $(BuildConfiguration) --no-incremental -p:TreatWarningsAsErrors=true -p:Version=$(SemVer) -p:InformationalVersion=$(InfoVer)'
+  - task: DotNetCoreCLI@2
+    displayName: 'Pack NuPkg'
+    inputs:
+      command: custom
+      custom: pack
+      projects: 'src/*.sln'
+      arguments: '-c $(BuildConfiguration) --no-build -o $(Build.ArtifactStagingDirectory) -p:Version=$(SemVer) -p:InformationalVersion=$(InfoVer)'
+  - task: PublishPipelineArtifact@1
+    displayName: 'Publish Artifacts'
+    inputs:
+      targetPath: '$(Build.ArtifactStagingDirectory)'
+      artifact: Artifacts
+- deployment: Deploy
+  environment: 'Prod'
+  displayName: 'Deploys artifacts'
+  dependsOn: Build
+  condition: and (succeeded(), startsWith( variables['Build.SourceBranch'], 'refs/tags' ))
+  timeoutInMinutes: 10
+  cancelTimeoutInMinutes: 5
+  strategy: 
+    runOnce:
+      deploy:
+        steps:
+        - checkout: none
+        - task: DownloadBuildArtifacts@0
+          displayName: 'Download Build Artifacts'
+          inputs:
+            artifactName: Artifacts
+            downloadPath: '$(Build.ArtifactStagingDirectory)'
+        - task: NuGetCommand@2
+          displayName: 'Push Nupkg to AZ Artifacts'
+          enabled: true
+          inputs:
+            command: push
+            packagesToPush: '$(Build.ArtifactStagingDirectory)/*.nupkg;!$(Build.ArtifactStagingDirectory)/*.symbols.nupkg'
+            publishVstsFeed: 'lab-feed'
+            verbosityPush: Normal
