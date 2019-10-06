@@ -25,54 +25,59 @@ pool:
   name: Azure Pipelines
   vmImage: windows-2019
 
-jobs:
-- job: Build
-  displayName: 'Builds, tests & produces artifacts'
-  timeoutInMinutes: 10
-  cancelTimeoutInMinutes: 5
-  steps:
-  - task: DotNetCoreCLI@2
-    displayName: 'Build'
-    inputs:
-      command: build
-      projects: 'src/*.sln'
-      arguments: '-c $(BuildConfiguration) --no-incremental -p:TreatWarningsAsErrors=true -p:Version=$(SemVer) -p:InformationalVersion=$(InfoVer)'
-  - task: DotNetCoreCLI@2
-    displayName: 'Pack NuPkg'
-    inputs:
-      command: custom
-      custom: pack
-      projects: 'src/*.sln'
-      arguments: '-c $(BuildConfiguration) --no-build -o $(Build.ArtifactStagingDirectory) -p:Version=$(SemVer) -p:InformationalVersion=$(InfoVer)'
-  - task: PublishPipelineArtifact@1
-    displayName: 'Publish Artifacts'
-    inputs:
-      path: '$(Build.ArtifactStagingDirectory)'
-      artifact: Artifacts
-- deployment: Deploy
-  environment: 'Prod'
-  displayName: 'Deploys artifacts'
-  dependsOn: Build
+stages:
+- stage: Build
+  jobs:
+  - job: BuildArtifacts
+    displayName: 'Builds, tests & produces artifacts'
+    timeoutInMinutes: 10
+    cancelTimeoutInMinutes: 5
+    steps:
+    - task: DotNetCoreCLI@2
+      displayName: 'Build'
+      inputs:
+        command: build
+        projects: 'src/*.sln'
+        arguments: '-c $(BuildConfiguration) --no-incremental -p:TreatWarningsAsErrors=true -p:Version=$(SemVer) -p:InformationalVersion=$(InfoVer)'
+    - task: DotNetCoreCLI@2
+      displayName: 'Pack NuPkg'
+      inputs:
+        command: custom
+        custom: pack
+        projects: 'src/*.sln'
+        arguments: '-c $(BuildConfiguration) --no-build -o $(Build.ArtifactStagingDirectory) -p:Version=$(SemVer) -p:InformationalVersion=$(InfoVer)'
+    - task: PublishPipelineArtifact@1
+      displayName: 'Publish Artifacts'
+      inputs:
+        path: '$(Build.ArtifactStagingDirectory)'
+        artifact: Artifacts
+- stage: Deploy
   condition: and (succeeded(), startsWith( variables['Build.SourceBranch'], 'refs/tags' ))
-  timeoutInMinutes: 10
-  cancelTimeoutInMinutes: 5
-  strategy: 
-    runOnce:
-      deploy:
-        steps:
-        - checkout: none
-        - task: NuGetCommand@2
-          displayName: 'Push Nupkg to AZ Feed'
-          inputs:
-            command: push
-            packagesToPush: '$(Pipeline.Workspace)/**/*.nupkg;!$(Pipeline.Workspace)/**/*.symbols.nupkg'
-            publishVstsFeed: 'lab-feed'
-            verbosityPush: Normal
-        - task: GithubRelease@0
-          displayName: 'Upload to GitHub Release'
-          inputs:
-            gitHubConnection: Foo
-            repositoryName: $(Build.Repository.Name)
-            action: edit
-            tag: $(Build.SourceBranchName)
-            assets: '$(Pipeline.Workspace)/**/*.nupkg'
+  dependsOn: Build
+  jobs:
+  - deployment: DeployArtifacts
+    environment: 'Prod'
+    displayName: 'Deploys artifacts'
+    timeoutInMinutes: 10
+    cancelTimeoutInMinutes: 5
+    strategy: 
+      runOnce:
+        deploy:
+          steps:
+          - checkout: none
+          - task: NuGetCommand@2
+            displayName: 'Push Nupkg to AZ Feed'
+            inputs:
+              command: push
+              packagesToPush: '$(Pipeline.Workspace)/**/*.nupkg;!$(Pipeline.Workspace)/**/*.symbols.nupkg'
+              publishVstsFeed: 'lab-feed'
+              verbosityPush: Normal
+          - task: GithubRelease@0
+            enabled: false
+            displayName: 'Upload to GitHub Release'
+            inputs:
+              gitHubConnection: Foo
+              repositoryName: $(Build.Repository.Name)
+              action: edit
+              tag: $(Build.SourceBranchName)
+              assets: '$(Pipeline.Workspace)/**/*.nupkg'
