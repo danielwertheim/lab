@@ -68,3 +68,11 @@ jobs:
             packagesToPush: '$(Pipeline.Workspace)/**/*.nupkg;!$(Pipeline.Workspace)/**/*.symbols.nupkg'
             publishVstsFeed: 'lab-feed'
             verbosityPush: Normal
+        - task: GithubRelease@0
+          displayName: 'Upload to GitHub Release'
+          inputs:
+            gitHubConnection: Foo
+            repositoryName: $(Build.Repository.Name)
+            action: edit
+            tag: $(Build.SourceBranchName)
+            assets: '$(Pipeline.Workspace)/**/*.nupkg'
