@@ -1,7 +1,8 @@
 root = true
 
 [*]
+indent_style = tab
 tab_width = 2
 
 [*.md]
-tab_width = 20
+tab_width = 4
