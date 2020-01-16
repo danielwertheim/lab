@@ -1,0 +1,16 @@
+*.swp
+*.*~
+
+# Visual Studio
+.vs/
+
+# Visual Studio Code
+.vscode
+
+# User-specific files
+*.suo
+*.user
+
+# Build
+[Bb]in/
+[Oo]bj/
